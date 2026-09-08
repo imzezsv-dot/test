@@ -105,6 +105,15 @@ class Settings:
     worker_concurrency: int = field(default_factory=lambda: _int("WORKER_CONCURRENCY", 1))
     job_timeout_seconds: int = field(default_factory=lambda: _int("JOB_TIMEOUT_SECONDS", 3600))
 
+    # ---- serverless / demo-lite modes ----
+    # Vercel and other serverless runtimes: run the pipeline inline on upload
+    # so a single request returns the completed result (no background worker,
+    # no filesystem persistence across invocations).
+    synchronous_jobs: bool = field(default_factory=lambda: _bool("SYNCHRONOUS_JOBS", False))
+    # Skip ffmpeg normalisation — the mock backends do not need real audio,
+    # and ffmpeg is not available on serverless runtimes.
+    demo_mode_lite: bool = field(default_factory=lambda: _bool("DEMO_MODE_LITE", False))
+
     @property
     def uploads_dir(self) -> Path:
         return self.data_dir / "uploads"

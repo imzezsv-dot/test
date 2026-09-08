@@ -102,6 +102,39 @@ async def create_job(
         consent=bool(consent),
         retention_hours=privacy["retention_hours"] or settings.retention_hours,
     )
+
+    if settings.synchronous_jobs:
+        # Serverless / no-worker mode: run the pipeline inline so a single
+        # HTTP round-trip returns the finished result. The frontend notices
+        # `result` in the response and skips polling.
+        import anyio
+
+        await anyio.to_thread.run_sync(services.orchestrator.run, record.id)
+        completed = services.store.get(record.id)
+        payload = {
+            "job_id": completed.id,
+            "access_token": token,
+            "state": completed.state.value,
+            "expires_at": completed.expires_at.isoformat() if completed.expires_at else None,
+            "poll": f"/v1/jobs/{completed.id}",
+        }
+        if completed.state is JobState.completed:
+            data_key = services.store.data_key(completed)
+            body = services.store.read_json(completed.id, RESULT_BLOB, data_key)
+            payload["result"] = {
+                "job": completed.summary().model_dump(mode="json"),
+                "transcript": body["transcript"],
+                "brief": body["brief"],
+                "quality": body["quality"],
+                "privacy": {
+                    "encrypted_at_rest": settings.encrypt_at_rest,
+                    "audio_retained": services.store.blob_exists(completed.id, "audio.enc"),
+                    "expires_at": payload["expires_at"],
+                    "models": body.get("models", {}),
+                },
+            }
+        return JSONResponse(payload, status_code=202)
+
     await services.queue.submit(record.id)
 
     summary = record.summary()

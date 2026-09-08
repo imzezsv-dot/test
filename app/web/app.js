@@ -138,7 +138,14 @@
       state.job = accepted.job_id;
       state.token = accepted.access_token;
       startPipeline(state.file.name);
-      follow(accepted.job_id, accepted.access_token);
+      if (accepted.result) {
+        // synchronous mode (Vercel / serverless): result already here.
+        renderStages(accepted.result.job.stages || []);
+        show(accepted.result);
+        resetStart();
+      } else {
+        follow(accepted.job_id, accepted.access_token);
+      }
     } catch (error) {
       say(`${error.message}${error.fix ? ' — ' + error.fix : ''}`);
       el.start.disabled = false;

@@ -46,20 +46,39 @@ so no job progress and no encrypted store).
 The Space picks up `README_HF.md` as its front matter (the `---` block
 sets the SDK to docker and the app port to 7860).
 
-## Vercel (static preview only)
+## Vercel (one-click, no Docker)
 
-Vercel makes sense as a **read-only preview** of the interface — the demo
-brief and transcript, with the upload button disabled. The live pipeline
-still lives on the Space.
+Vercel deploys this repo as-is — the FastAPI app runs on Vercel's Python
+serverless runtime, static assets are served from the edge CDN. No
+Dockerfile needed on Vercel's side.
 
 ```
-1. python scripts/build_static.py     # produces public/ + vercel.json
-2. Import the repo into Vercel; framework preset = Other; output = public.
-3. Deploy.
+1. vercel.com/new → import github.com/imzezsv-dot/test → project name "vocalyze".
+2. Framework preset: Other. Root directory: repo root. Build command: (none).
+3. Deploy. Vercel reads vercel.json and:
+     - runs api/index.py as the serverless FastAPI backend
+     - serves public/* from its edge CDN
 ```
 
-The static build points the "Transcribe the meeting" button at nothing and
-opens straight into the finished example.
+That's it. The upload runs the pipeline inline (single HTTP round-trip
+returns the finished result — no queue, no polling), because Vercel
+serverless has no background workers and no persistent filesystem. The
+mock backends produce a full transcript and brief in ~100 ms, well
+inside Vercel's 10 s Hobby ceiling.
+
+**What Vercel can and cannot do:**
+
+- ✅ live upload flow, real HTTP API (`/v1/jobs`, `/v1/privacy/policy`,
+  `/v1/capabilities`, `/v1/health`, `/docs`).
+- ✅ full interface, real speaker attribution & grounding on the demo
+  fixture.
+- ❌ Whisper, pyannote, an LLM — Vercel has no ffmpeg, no persistent
+  disk, no long-running worker, and the model weights are gigabytes.
+  For the real pipeline use the Hugging Face Space (above), Render, or
+  any Docker host.
+
+The two are complementary: Vercel is the always-on public preview;
+the Space is where the real models run.
 
 ## Render / Fly / Railway (alternatives)
 

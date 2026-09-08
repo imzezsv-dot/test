@@ -26,6 +26,7 @@ class Services:
     audit: AuditLog
     queue: "object"  # JobQueue; kept loose to avoid circular imports
     sweeper: "object"  # RetentionSweeper
+    orchestrator: "object" = None  # only used in synchronous_jobs mode
 
 
 def get_services(request: Request) -> Services:

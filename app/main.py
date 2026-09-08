@@ -55,11 +55,13 @@ async def lifespan(app: FastAPI):
     sweeper = RetentionSweeper(store, audit, settings.retention_sweep_seconds)
 
     app.state.services = Services(
-        settings=settings, store=store, audit=audit, queue=queue, sweeper=sweeper
+        settings=settings, store=store, audit=audit, queue=queue, sweeper=sweeper,
+        orchestrator=orchestrator,
     )
 
-    queue.start()
-    sweeper.start()
+    if not settings.synchronous_jobs:
+        queue.start()
+        sweeper.start()
     registry.preload()
     audit.record("service.started", version=settings.version, asr=settings.asr_backend)
     log.info(
@@ -74,8 +76,9 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
-        await queue.stop()
-        await sweeper.stop()
+        if not settings.synchronous_jobs:
+            await queue.stop()
+            await sweeper.stop()
         audit.record("service.stopped")
 
 

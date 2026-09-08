@@ -132,6 +132,23 @@ class Orchestrator:
         source.write_bytes(raw)
         del raw
 
+        # Serverless / demo-lite: skip ffmpeg entirely and pretend a normalised
+        # 16 kHz mono copy exists. The mock backends do not read the file, so
+        # nothing downstream cares — this lets the pipeline run on hosts where
+        # ffmpeg is not installed (e.g. Vercel Python runtime).
+        if self.settings.demo_mode_lite:
+            wav = workdir / "audio.wav"
+            wav.write_bytes(b"RIFF\x00\x00\x00\x00WAVEfmt ")
+            self.store.write_blob(record.id, AUDIO_BLOB, wav.read_bytes(), data_key)
+            self.store.delete_blob(record.id, ORIGINAL_BLOB)
+            _shred(source)
+            self.store.update(record.id, duration_seconds=112.5)
+            self.store.mark_stage(
+                record.id, JobState.normalizing, "done",
+                detail="demo-lite: audio normalisation skipped",
+            )
+            return wav
+
         try:
             info = audio_tools.probe(source, self.settings.ffmpeg_bin)
             if info.duration > self.settings.max_duration_minutes * 60:
