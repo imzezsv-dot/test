@@ -162,6 +162,7 @@
       const stage = byName[name] || { state: 'pending' };
       const detail = stage.detail || (stage.state === 'running' ? 'in progress' : '');
       return `<div class="stage" data-state="${stage.state}">
+        <div class="stage__num"></div>
         <div class="stage__name">${STAGE_LABEL[name]}</div>
         <div class="stage__detail">${detail}</div>
       </div>`;
