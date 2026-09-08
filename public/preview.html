@@ -8,11 +8,11 @@
 <title>Vocalyze — who said what, and what you decided</title>
 <meta name="description" content="Upload a meeting recording. Get a speaker-attributed transcript and a brief where every point cites the line it came from.">
 <meta name="theme-color" content="#EFE9D8">
-<link rel="preload" as="font" type="font/woff2" crossorigin href="/static/fonts/woff2/thmanyah-serif-display-bold.woff2">
-<link rel="preload" as="font" type="font/woff2" crossorigin href="/static/fonts/woff2/thmanyah-serif-text-regular.woff2">
-<link rel="preload" as="font" type="font/woff2" crossorigin href="/static/fonts/woff2/thmanyah-sans-medium.woff2">
-<link rel="stylesheet" href="/static/fonts.css">
-<link rel="stylesheet" href="/static/styles.css">
+<link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/woff2/thmanyah-serif-display-bold.woff2">
+<link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/woff2/thmanyah-serif-text-regular.woff2">
+<link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/woff2/thmanyah-sans-medium.woff2">
+<link rel="stylesheet" href="/fonts.css">
+<link rel="stylesheet" href="/styles.css">
 </head>
 <body>
 
@@ -143,7 +143,7 @@
         </label>
 
         <div class="btn-row">
-          <button class="btn btn--primary" id="start" disabled>Transcribe the meeting</button>
+          <button class="btn btn--primary" id="start" disabled data-static="true">Transcribe the meeting</button>
           <button class="btn btn--quiet" id="load-sample">See a finished example</button>
         </div>
 
@@ -276,7 +276,7 @@
   </div>
 </footer>
 
-<script src="/static/demo-data.js"></script>
-<script src="/static/app.js"></script>
+<script src="/demo-data.js"></script>
+<script src="/app.js"></script>
 </body>
 </html>
