@@ -1,5 +1,7 @@
 # Vocalyze — integration and privacy layer
 
+[**Deploy on Vercel →**](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fimzezsv-dot%2Ftest&project-name=vocalyze&repository-name=vocalyze)  ·  [**Open a Hugging Face Space →**](https://huggingface.co/new-space?template=docker&sdk=docker)  ·  [Deploy guide](DEPLOY.md)  ·  [Delivery notes](DELIVERY.md)
+
 Upload a meeting recording. Get back a speaker-attributed transcript and a
 brief in which **every point carries the line it came from**.
 
