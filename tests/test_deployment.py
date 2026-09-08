@@ -10,7 +10,9 @@ and is only correct while it stays byte-identical.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import sys
 from pathlib import Path
 
 import pytest
@@ -112,6 +114,52 @@ def test_the_upload_returns_the_finished_result_in_one_round_trip(serverless_cli
     assert result["privacy"]["retention_hours"] == 24
 
 
+def test_the_api_works_on_a_host_that_never_runs_lifespan(tmp_path, monkeypatch):
+    """Vercel's Python runtime does not emit ASGI lifespan events, so startup
+    never runs there and `app.state.services` is never set. Every /v1/ route
+    then died with AttributeError and the interface reported the API as
+    unreachable — while the static page, served from the CDN, looked fine.
+
+    A TestClient used without its context manager reproduces exactly that.
+    """
+    import importlib
+
+    from fastapi.testclient import TestClient
+
+    from app.core.crypto import generate_service_key
+
+    monkeypatch.setenv("SYNCHRONOUS_JOBS", "true")
+    monkeypatch.setenv("DEMO_MODE_LITE", "true")
+    monkeypatch.setenv("AUDIT_LOG_ENABLED", "false")
+    monkeypatch.setenv("DATA_DIR", str(tmp_path / "no-lifespan"))
+    monkeypatch.setenv("ENCRYPTION_KEY", generate_service_key())
+
+    import app.config as config
+
+    config.get_settings.cache_clear()
+    import app.main as main
+
+    importlib.reload(main)
+
+    client = TestClient(main.app)          # deliberately not `with` — no startup
+    assert not hasattr(main.app.state, "services")
+
+    assert client.get("/v1/health").json()["status"] == "ok"
+    assert client.get("/v1/capabilities").json()["demo_mode"] is True
+    assert client.get("/v1/privacy/policy").status_code == 200
+
+    # and a full upload still completes on that host
+    accepted = client.post(
+        "/v1/jobs",
+        files={"file": ("meeting.mp4", b"RIFF$\x00\x00\x00WAVEfmt ", "video/mp4")},
+        data={"consent": "true"},
+    ).json()
+    assert accepted["state"] == "completed"
+    assert accepted["result"]["transcript"]["utterances"]
+
+    config.get_settings.cache_clear()
+
+
 def test_the_serverless_build_declares_that_it_keeps_nothing(serverless_client):
     """On a serverless host the container's storage goes with the request, so
     a later call cannot reach the job — as `test_a_second_invocation_cannot_see
@@ -180,6 +228,24 @@ def test_the_interface_keys_export_and_delete_off_persistence():
     assert "if (state.live && state.job) {" not in script
 
 
+def test_the_serverless_build_advertises_the_hosts_real_upload_limit():
+    """Vercel rejects a request body over 4.5 MB at the edge, before the
+    function runs. Advertising the repository default of 200 MB would mean the
+    interface accepts a file, uploads it, and receives a platform error this
+    service never saw and cannot explain."""
+    entry = (ROOT / "api" / "index.py").read_text(encoding="utf-8")
+    assert 'setdefault("MAX_UPLOAD_MB", "4")' in entry
+
+
+def test_the_interface_refuses_an_oversized_file_before_uploading_it():
+    script = (ROOT / "app" / "web" / "app.js").read_text(encoding="utf-8")
+    assert "function rejectReason" in script
+    assert "limits.max_upload_mb" in script
+    assert "limits.allowed_extensions" in script
+    # and a refused file must not stay armed for sending
+    assert "state.file = refusal ? null : file" in script
+
+
 def test_the_serverless_build_still_enforces_consent(serverless_client):
     response = serverless_client.post(
         "/v1/jobs",
@@ -193,6 +259,39 @@ def test_the_serverless_build_still_says_it_is_running_scripted_models(serverles
     """The interface reads this and badges itself. Telling someone a scripted
     sample is their meeting would be a lie."""
     assert serverless_client.get("/v1/capabilities").json()["demo_mode"] is True
+
+
+def test_the_entry_point_reports_why_it_failed_instead_of_a_blank_500(monkeypatch, tmp_path):
+    """When the bundle cannot import the service, every route answers 500 with
+    no body and the interface can only say "no API is reachable" — true and
+    useless. The entry point serves the import error instead, so the failure
+    can be read from a browser rather than guessed at."""
+    import importlib.util
+    import json
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path / "broken"))
+    # Make the import of the service fail the way a bad bundle does.
+    monkeypatch.setitem(sys.modules, "app.main", None)
+
+    spec = importlib.util.spec_from_file_location("vercel_entry_broken", ROOT / "api" / "index.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    received = []
+
+    async def send(message):
+        received.append(message)
+
+    async def receive():
+        return {"type": "http.request"}
+
+    asyncio.run(module.app({"type": "http", "method": "GET", "path": "/v1/capabilities"}, receive, send))
+
+    assert received[0]["status"] == 503
+    body = json.loads(received[1]["body"])
+    assert body["error"] == "service_unavailable"
+    assert body["cause"], "the import error itself has to be in the response"
+    assert body["python"]
 
 
 def test_the_vercel_entry_point_imports_and_exposes_the_app(monkeypatch, tmp_path):
